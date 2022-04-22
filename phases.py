@@ -169,7 +169,7 @@ def Scan():
     def StepDepth(): # CURRENTLY SAME DIST FOR ALL THREE AXES
         step_size = float(input("Enter the minimum distance to travel along each axis (cm): "))
         depth = float(input("Enter the max. depth to scan (cm): "))
-        step_pulse = 
+        step_pulse = X.pulseCalc(step_size) # Add something here
         return step_pulse, depth
 
     def ReadField():        # Work on talking to the probe and put all comms here
@@ -186,7 +186,7 @@ def Scan():
         field_file = open("teslameter_data.txt", "w")
         writer = csv.writer(field_file)
 
-        word = ""
+        word = ""                                        # Doesn't work, fix this loop
         while (word != "Y" or word != "y"):
             writer.writerow(serial_num, probe_field)
             word = str(input("Quit? (Y/N) "))
@@ -231,7 +231,7 @@ def Scan():
                     store_file.write(curr_X, curr_Y, curr_Z, field_val)     # Write coords+field values into a file here
                     print(f"({curr_X}, {curr_Y}, {curr_Z}, {field_val})")
                     Z.AxisMove(step_size, Dir = DirFlag(iterator))
-                    curr_Z += step_size
+                    curr_Z += xstep_size
                     flag += 1
                 curr_Z = 0
                 Y.AxisMove(step_size, Dir=1)
