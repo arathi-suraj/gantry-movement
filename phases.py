@@ -2,6 +2,8 @@ import pyfirmata as fir
 import numpy as np
 import time, pickle
 from lakeshore import Teslameter
+import csv
+
 
 class axis(object):
     
@@ -85,7 +87,8 @@ Enter 0 if all switches are off. Enter: "))
 
         if __name__ == "__main__":
             try:
-                board = fir.Arduino("/dev/tty.usbmodem141101")
+                board = fir.Arduino("/dev/tty.usbmodem11101") # Change this
+                # based on system used
                 print("Connection worked.")
 
                 board.digital[self.dir_pin].write(Dir)
@@ -148,6 +151,8 @@ the keyboard.\n3. Exit.\n"))
         elif choose == "3":
             print("Exiting the setup phase.")
             break
+        elif choose == "17":
+            break
         else:
             print("Invalid input. Try 1, 2 or 3.")
     
@@ -161,38 +166,24 @@ def Scan():
         points = []
         print("Enter points in the form (X cm, Y cm). Do bottom-left point and top-right point.")
         for times in range(0, 2):
-            X = input(f"Enter point {times+1} X coord: ")
-            Y = input(f"Enter point {times+1} Y coord: ")
+            X = float(input(f"Enter point {times+1} X coord: "))
+            Y = float(input(f"Enter point {times+1} Y coord: "))
             points.append([X, Y])
         return points
 
     def StepDepth(): # CURRENTLY SAME DIST FOR ALL THREE AXES
         step_size = float(input("Enter the minimum distance to travel along each axis (cm): "))
         depth = float(input("Enter the max. depth to scan (cm): "))
-        step_pulse = X.pulseCalc(step_size) # Add something here
-        return step_pulse, depth
+        step_pulse = X.pulseCalc(step_size)
+        
+        return step_size, step_pulse, depth
 
-    def ReadField():        # Work on talking to the probe and put all comms here
-        # Code below is from test script; check if that works first!
-        from lakeshore import Teslameter
-        from csv import writer
-
+    def ReadField():
         sol_teslameter = Teslameter()
         sol_teslameter.command("SENSE:MODE DC")
 
-        serial_num = sol_teslameter.query("PROBE:SNUMBER?")
         probe_field = sol_teslameter.get_dc_field()
-        
-        field_file = open("teslameter_data.txt", "w")
-        writer = csv.writer(field_file)
-
-        word = ""                                        # Doesn't work, fix this loop
-        while (word != "Y" or word != "y"):
-            writer.writerow(serial_num, probe_field)
-            word = str(input("Quit? (Y/N) "))
-
-        sol_teslameter.log_buffered_data_to_file(10, 10, field_file)
-        field_file.close()
+        return probe_field
 
     
     def DirFlag(iteration):
@@ -203,6 +194,7 @@ def Scan():
 
     def DoScan():
         magnet_name = str(input("Enter magnet name: "))
+        points = GetRect()
         # Start with (0,0,0) and immediately move to lower left corner. Wait for 10 seconds and start scanning.
         # By Nathan's advice, I'm doing Y-Z plane and then X.
 
@@ -211,33 +203,50 @@ def Scan():
         bot_Y = points[0][1]
         top_Y = points[1][1]
 
+        step_size, step_pulse, depth = StepDepth()
+
+        # AxisMove takes pul, dir args so we need pulses
+        leftX_pul = X.pulseCalc(left_X)
+        rightX_pul = X.pulseCalc(right_X)
+        botY_pul = Y.pulseCalc(bot_Y)
+        topY_pul = Y.pulseCalc(top_Y)
+        
         # Moving to the bottom left point.
-        Y.AxisMove(bot_Y, Dir = 0) # Moves to the bottom
-        X.AxisMove(left_X, Dir = 0) # Moves to the left
+        X.AxisMove(leftX_pul, Dir = 0) # Moves to the left
+        Y.AxisMove(botY_pul, Dir = 0) # Moves to the bottom
         
         curr_X = left_X
         curr_Y = bot_Y
-        curr_Z = 0 # Change to a +ve Z value as we start BEFORE the Z=0 plane.
+        curr_Z = 0 
 
         flag = 0
+        flag1 = 0
         
         store_file = open(f"{magnet_name}_scan.txt", "a")
         
-        while (curr_X <= right_X):
-            while (curr_Y <= top_Y):
-                while (abs.(curr_Z) <= depth):
-                    iterator = (-1)**flag
-                    field_val = ReadField()                                 # Read mag field value here from probe; make serial comm function
-                    store_file.write(curr_X, curr_Y, curr_Z, field_val)     # Write coords+field values into a file here
-                    print(f"({curr_X}, {curr_Y}, {curr_Z}, {field_val})")
-                    Z.AxisMove(step_size, Dir = DirFlag(iterator))
-                    curr_Z += xstep_size
-                    flag += 1
-                curr_Z = 0
-                Y.AxisMove(step_size, Dir=1)
-                curr_Y += step_size
-            curr_Y = bot_Y
-            X.AxisMove(step_size, Dir=1)
+        while (curr_X <= right_X and curr_X >= left_X):
+            yiterator = (-1)**flag1
+            while (curr_Y <= top_Y and curr_Y >= bot_Y):
+                ziterator = (-1)**flag
+                while (curr_Z <= depth and curr_Z >= 0):
+                    #field_val = ReadField()                                 # Read mag field value here from probe; make serial comm function
+                    #store_file.write(curr_X, curr_Y, curr_Z, field_val)     # Write coords+field values into a file here
+                    print(f"({curr_X}, {curr_Y}, {curr_Z})\n")
+                    Z.AxisMove(step_pulse, Dir = DirFlag(ziterator))
+                    curr_Z = curr_Z + (ziterator*step_size)
+                flag += 1
+                if ziterator == +1:
+                    curr_Z = depth
+                elif ziterator == -1:
+                    curr_Z = 0
+                Y.AxisMove(step_pulse, Dir=DirFlag(yiterator))
+                curr_Y = curr_Y + (yiterator*step_size)
+            flag1 += 1
+            if yiterator == +1:
+                curr_Y = top_Y
+            elif yiterator == -1:
+                curr_Y = bot_Y
+            X.AxisMove(step_pulse, Dir=1)
             curr_X += step_size
 
         # Close file here
@@ -258,7 +267,9 @@ def Scan():
                         AxisMove(step_pul, dir)
                     AxisMove(step_pul, dir)"""
         # <\OLD CODE>
-
+        
+    DoScan()
+    
 
 print("Initialise X-axis")
 X = axis()
@@ -289,4 +300,3 @@ while True:
     else:
         print("Invalid choice.")
         print("1. Setup Phase\n2. Scan Phase\n3. Test Phase\n Enter exit to leave.")
-
