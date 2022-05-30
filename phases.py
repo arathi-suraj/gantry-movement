@@ -1,4 +1,5 @@
 import pyfirmata as fir
+import pyserial as ser
 import numpy as np
 import time, pickle
 from lakeshore import Teslameter
@@ -56,7 +57,7 @@ Enter 0 if all switches are off. Enter: "))
     def onePulse(self):
         # DON'T CHANGE THIS VALUE (used to be 0.957)
         pitch = 1 # (cm) double start, so this is really pitch * 2
-        one_pulse = pitch/(self.pulperrev) # gives cm/pulse
+        one_pulse = pitch/(self.pulperrev) # gives mm/pulse
         return one_pulse 
 
     def pulseCalc(self, dist=0):
@@ -95,9 +96,9 @@ Enter 0 if all switches are off. Enter: "))
 
                 while (count_Flag <= (pul-1)):
                     board.digital[self.pul_pin].write(1)
-                    time.sleep(1e-4) # <---- Check this value
+                    time.sleep(2e-4) # <---- Check this value
                     board.digital[self.pul_pin].write(0)
-                    time.sleep(1e-4)
+                    time.sleep(2e-4)
                     count_Flag += 1
             except:
                 print("Board not connected to/detected by computer.")
@@ -230,7 +231,7 @@ def Scan():
                 ziterator = (-1)**flag
                 while (curr_Z <= depth and curr_Z >= 0):
                     #field_val = ReadField()                                 # Read mag field value here from probe; make serial comm function
-                    #store_file.write(curr_X, curr_Y, curr_Z, field_val)     # Write coords+field values into a file here
+                    #store_file.write(curr_X, curr_Y, curr_Z)     # Write coords+field values into a file here
                     print(f"({curr_X}, {curr_Y}, {curr_Z})\n")
                     Z.AxisMove(step_pulse, Dir = DirFlag(ziterator))
                     curr_Z = curr_Z + (ziterator*step_size)
@@ -268,7 +269,8 @@ def Scan():
                     AxisMove(step_pul, dir)"""
         # <\OLD CODE>
         
-    DoScan()
+    pul = X.pulseCalc(30)
+    X.AxisMove(pul, 1)
     
 
 print("Initialise X-axis")
